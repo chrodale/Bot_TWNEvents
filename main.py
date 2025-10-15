@@ -4,8 +4,6 @@ import discord
 from discord.ext import commands
 import pandas as pd
 
-global halloween_df
-
 # ------------------------------------------------
 # Setup
 
@@ -18,64 +16,61 @@ bot = commands.Bot(command_prefix="", intents=intents)
 async def on_ready():
     print(f"{bot.user} has logged in.")
 
-halloween_df = pd.read_csv(r"Drive Sync/TWN_Halloween_26.csv")
+currency_df = pd.read_csv("Currency.csv")
+allowed_channels_df = pd.read_csv("Allowed_Channels.csv")
 
-halloween_df["UID"] = halloween_df["UID"].astype(int)
-halloween_df["Candy_Scales"] = halloween_df["Candy_Scales"].astype(int)
+currency_df["UID"] = currency_df["UID"].astype(int)
+currency_df["Scales"] = currency_df["Scales"].astype(int)
 
 # ------------------------------------------------
 # Response controller
 
+# Trigger on message
 @bot.event
 async def on_message(message):
-    global halloween_df
-    if message.author.bot:
+    global currency_df
+    
+    # Make sure the message is valid
+    if message.author.bot or message.channel.id not in allowed_channels_df["Allowed_Channels"].values:
         return
-    if "trick or treat" in message.content.lower():
-        
+    elif "trick or treat" in message.content.lower():
+
+        # Determine if trick or treat
         roll = random.randint(1, 2)
-        
+
+        # Trick: 
         if roll == 1:
             response = "You have been tricked! Your candy count has increased."
 
-            if message.author.id not in halloween_df["UID"].values:
-
+            if message.author.id not in currency_df["UID"].values:
+                # Create a new row
                 new_row = {
                     "UID": message.author.id,
                     "Username": message.author.name,
-                    "Candy_Scales": 1
+                    "Scales": 1
                 }
-                
-                halloween_df = pd.concat([halloween_df, pd.DataFrame([new_row])], ignore_index=True)
-                halloween_df.to_csv(r"Drive Sync/TWN_Halloween_26.csv")
+                currency_df = pd.concat([currency_df, pd.DataFrame([new_row])], ignore_index=True)
+                currency_df.to_csv("Currency.csv")
 
             else:
+                # Update existing row
+                currency_df.loc[currency_df["UID"] == message.author.id, "Scales"] += 1
+                currency_df.to_csv("Currency.csv")
 
-                halloween_df.loc[halloween_df["UID"] == message.author.id, "Candy_Scales"] += 1
-                halloween_df.to_csv(r"Drive Sync/TWN_Halloween_26.csv")
-    
+        # Treat:
         else: 
             response = "You got a treat! (But no candy)"
 
-            # insert treat response here
+            # update treat response here
     
         await message.channel.send(response)
-        
     await bot.process_commands(message)
-
-
-# ------------------------------------------------
-# Commands
-
-@bot.command()
-async def ping(ctx):
-    await ctx.send("pong!")
 
 # ------------------------------------------------
 # Bot run
 
 TOKEN = os.environ.get("TOKEN")
 if not TOKEN:
-    raise ValueError("No TOKEN found. Set the TOKEN environment variable.")
+    raise ValueError("No TOKEN found.")
 
 bot.run(TOKEN)
