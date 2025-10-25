@@ -3,7 +3,21 @@ import random
 import discord
 from discord.ext import commands
 import pandas as pd
+from flask import Flask
+from threading import Thread
 
+# ------------------------------------------------
+# Keep-alive (for UptimeRobot)
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_webserver():
+    app.run(host='0.0.0.0', port=8080)
+    
 # ------------------------------------------------
 # Setup
 
@@ -12,11 +26,9 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="", intents=intents)
 
-
 @bot.event
 async def on_ready():
     print(f"{bot.user} has logged in.")
-
 
 currency_df = pd.read_csv("Currency.csv")
 allowed_channels_df = pd.read_csv("Allowed_Channels.csv")
@@ -26,10 +38,8 @@ currency_df["Scales"] = currency_df["Scales"].astype(int)
 
 scales_emoji = "<:scales~1:1416861558822141972>"
 
-
 # ------------------------------------------------
 # Response controller
-
 
 # Trigger on message
 @bot.event
@@ -70,13 +80,19 @@ async def on_message(message):
 
         # Treat:
         else:
-            response = "You got a treat! (But no candy)"
-
-            # update treat response here
-
+            halloween_role = message.guild.get_role(1431723739317534760)
+            
+            if any(role.id == 1431723739317534760 for role in message.author.roles):
+                response = "You got a treat! You traded in an extra Halloween role for candy scales!"
+                currency_df.loc[currency_df["UID"] == message.author.id, "Scales"] += 1
+                currency_df.to_csv("Currency.csv")
+                
+            else:
+                response = "You got a treat! The Halloween role is now yours!"
+                await message.author.add_roles(halloween_role)
+                
         await message.channel.send(response)
     await bot.process_commands(message)
-
 
 # Command to add channels to the "Allowed Channels"
 @bot.command()
@@ -109,7 +125,6 @@ async def remove_channel(ctx, channel: discord.TextChannel):
     # If channel is not on list, tell user
     else:
         await ctx.send(f"{channel.mention} is not on the list")
-
 
 # Command to list all channels from the "Allowed Channels"
 @bot.command()
@@ -156,12 +171,15 @@ async def balance(ctx, user: discord.User):
     else:
         await ctx.send("**This user currently has no balance**")
 
-
 # ------------------------------------------------
 # Bot run
 
-TOKEN = os.environ.get("TOKEN")
-if not TOKEN:
-    raise ValueError("No TOKEN found.")
+if __name__ == "__main__":
+    thread = Thread(target=run_webserver, daemon=True)
+    thread.start()
 
-bot.run(TOKEN)
+    TOKEN = os.environ.get("TOKEN")
+    if not TOKEN:
+        raise ValueError("No TOKEN found. Set the TOKEN environment variable.")
+
+    bot.run(TOKEN)
